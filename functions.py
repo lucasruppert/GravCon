@@ -12,6 +12,21 @@ def theta(t, A, tau, w, phase, h):
 def lin(x, a, b):
     return a*x + b
 
+def r(a, o):
+    b = ufloat(44, 0.01 / 3**0.5) * 1e-3
+    c = ufloat(117.12, 0.01 / 3**0.5) * 1e-3
+    d = ufloat(49.90, 0.03 / 3**0.5) * 1e-3
+    e = ufloat(25.04, 0.01 / 3**0.5) * 1e-3
+    p = (ufloat(120, 0.01 / 3**0.5) * 0.5 - ufloat(17.1, 0.01 / 3**0.5) * 0.5) * 1e-3
+    l = ufloat(4.321, 0.001)
+    
+    beta = a - 0.5 * b - 0.5 * d
+    gamma = c - 0.5 * d - 0.5 * e
+
+    phi = np.arctan(o / l) + np.arcsin(beta / gamma)
+
+    return (gamma**2 + p**2 - 2 * gamma * p *np.cos(phi))
+
 
 def rotate_data(xdata, ydata):
     """
