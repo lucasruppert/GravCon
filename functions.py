@@ -14,6 +14,36 @@ def lin(x, a, b):
 
 
 def rotate_data(xdata, ydata):
+    """
+    Rotate 2D data so that its dominant linear trend aligns with the x-axis.
+
+    This function first fits a straight line `y = m*x + b` to the input data
+    using `curve_fit` and the model function `lin`. The fitted slope is then
+    used to compute a rotation angle that removes the linear tilt of the data.
+    The data are translated and rotated such that the fitted line becomes
+    horizontal.
+
+    Parameters
+    ----------
+    xdata : array-like
+        Input x-coordinates.
+    ydata : array-like
+        Input y-coordinates.
+
+    Returns
+    -------
+    x : ndarray
+        Rotated x-coordinates, aligned with the principal direction of the data.
+    y : ndarray
+        Rotated y-coordinates, centered and orthogonal to the fitted trend.
+
+    Notes
+    -----
+    - The rotation angle is computed as phi = arctan(m), where m is the fitted slope.
+    - The data are shifted by the fitted intercept before rotation to center them.
+    - Requires a linear model function `lin` compatible with `curve_fit`.
+    """
+    
     popt, pcov = curve_fit(lin, xdata=xdata, ydata=ydata)
     phi = np.arctan(popt[0])
     
@@ -25,7 +55,61 @@ def rotate_data(xdata, ydata):
 
 def fit(t, xdata, ydata, p0: list = [180, 2000, 0.017, -1.5, 630], cutoff: int = 0,
         plot: bool = False, duration: bool = False, angle: bool = False):
-    
+    """
+    Fit the expected model to rotated raw tracking data and optionally return
+    derived quantities or a plot.
+
+    The function first rotates the input data using `rotate_data`, then fits
+    the model function `theta` to the rotated x-component using nonlinear
+    least squares (`scipy.optimize.curve_fit`). From the fitted parameters,
+    it computes the oscillation period T and optionally the angular offset.
+
+    Parameters
+    ----------
+    t : array-like
+        Time values corresponding to the data points.
+    xdata : array-like
+        Raw x-coordinate data.
+    ydata : array-like
+        Raw y-coordinate data.
+    p0 : list, optional
+        Initial guess for the fit parameters passed to `curve_fit`.
+    cutoff : int, optional
+        Index at which to start the fit (useful for ignoring initial data).
+        Default is 0.
+    plot : bool, optional
+        If True, generate a two-panel plot showing:
+        - The rotated x data with the fitted model.
+        - The rotated y data.
+        Default is False.
+    duration : bool, optional
+        If True, return the oscillation period T (with uncertainty).
+        Default is False.
+    angle : bool, optional
+        If True, return the fitted angular offset parameter (with uncertainty).
+        Default is False.
+
+    Returns
+    -------
+    uncertainties.UFloat or numpy.ndarray or tuple
+        - If `duration` and `angle` are both True:
+            Returns (T, angle_offset), both as `ufloat`.
+        - If only `duration` is True:
+            Returns T as a `ufloat`.
+        - If only `angle` is True:
+            Returns the angular offset as a `ufloat`.
+        - Otherwise:
+            Returns all fitted parameters as an array with uncertainties
+            (`uncertainties.unumpy.uarray`).
+
+    Notes
+    -----
+    - The period is computed as T = 2π / ω, where ω is the third fitted parameter.
+    - Parameter uncertainties are derived from the covariance matrix returned
+      by `curve_fit`.
+
+    """
+
     x, y = rotate_data(xdata, ydata)
     popt, pcov = curve_fit(theta, t[cutoff:], x[cutoff:], p0=p0)
 
