@@ -28,6 +28,29 @@ def r(a, o):
     return (gamma**2 + p**2 - 2 * gamma * p *np.cos(phi))
 
 
+def conversion(h1, h2):
+    """
+    Calculate a factor to convert virtual meters to cm (!).
+
+    Parameters
+    ----------
+    h1 : numpy.ndarray[uncertainties.UFloat]
+        Input virtual position 1
+    h2 : numpy.ndarray[uncertainties.UFloat]
+        Input virtual position 2
+    
+    Returns
+    -------
+    c : uncertainties.UFloat
+        factor to convert virtual meters into real cm
+    """
+    l_h = ufloat(46.1, 0.1) #cm
+    alpha = unp.arctan((h2[1] - h1[1]) / (h2[0] - h1[0]))
+    H = (h2[1] - h1[1]) / unp.sin(alpha)
+    
+    return l_h/H
+
+
 def rotate_data(xdata, ydata, zero_pos: tuple[float | int] | None = None):
     """
     Rotate 2D data so that its dominant linear trend aligns with the x-axis.
@@ -73,7 +96,7 @@ def rotate_data(xdata, ydata, zero_pos: tuple[float | int] | None = None):
 
 
 def fit(t, xdata, ydata, p0: list = [180, 2000, 0.017, -1.5, 630], cutoff: int = 0, zero_pos: tuple[float | int] | None = None,
-        plot: bool = False):
+        h1: list[ufloat] | None = None, h2: list[ufloat] | None = None, plot: bool = False):
     """
     Fit the expected model to rotated raw tracking data and optionally return
     derived quantities or a plot.
