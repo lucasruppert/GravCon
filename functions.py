@@ -10,7 +10,7 @@ def theta(t, A, tau, w, phase, h):
 
 
 def lin(x, a, b):
-    return a*x + b
+    return a * x + b
 
 def r(a, o):
     b = ufloat(44, 0.01 / 3**0.5) * 1e-3
@@ -23,12 +23,12 @@ def r(a, o):
     beta = a - 0.5 * b - 0.5 * d
     gamma = c - 0.5 * d - 0.5 * e
 
-    phi = np.arctan(o / l) + np.arcsin(beta / gamma)
+    phi = 0.5 * np.arctan(o / l) + np.arcsin(beta / gamma)
 
     return (gamma**2 + p**2 - 2 * gamma * p *np.cos(phi))
 
 
-def rotate_data(xdata, ydata):
+def rotate_data(xdata, ydata, zero_pos: tuple[float | int] | None = None):
     """
     Rotate 2D data so that its dominant linear trend aligns with the x-axis.
 
@@ -65,11 +65,15 @@ def rotate_data(xdata, ydata):
     x = xdata * np.cos(-phi) - (ydata - popt[1]) * np.sin(-phi)
     y = xdata * np.sin(-phi) + (ydata - popt[1]) * np.cos(-phi)
 
-    return x, y
+    if zero_pos != None:
+        o = zero_pos[0] * np.cos(-phi) - (zero_pos[1] - popt[1]) * np.sin(-phi)
+        return x, y, o
+    
+    return x, y, None
 
 
-def fit(t, xdata, ydata, p0: list = [180, 2000, 0.017, -1.5, 630], cutoff: int = 0,
-        plot: bool = False, duration: bool = False, angle: bool = False):
+def fit(t, xdata, ydata, p0: list = [180, 2000, 0.017, -1.5, 630], cutoff: int = 0, zero_pos: tuple[float | int] | None = None,
+        plot: bool = False):
     """
     Fit the expected model to rotated raw tracking data and optionally return
     derived quantities or a plot.
@@ -92,43 +96,40 @@ def fit(t, xdata, ydata, p0: list = [180, 2000, 0.017, -1.5, 630], cutoff: int =
     cutoff : int, optional
         Index at which to start the fit (useful for ignoring initial data).
         Default is 0.
+    zero_pos : tuple[float | int], optional
+        (x, y) position of the reflected laser point in the default coordinates of the programm.
+        Default is None.
     plot : bool, optional
         If True, generate a two-panel plot showing:
         - The rotated x data with the fitted model.
         - The rotated y data.
         Default is False.
-    duration : bool, optional
-        If True, return the oscillation period T (with uncertainty).
-        Default is False.
-    angle : bool, optional
-        If True, return the fitted angular offset parameter (with uncertainty).
-        Default is False.
+    
 
     Returns
     -------
-    uncertainties.UFloat or numpy.ndarray or tuple
-        - If `duration` and `angle` are both True:
-            Returns (T, angle_offset), both as `ufloat`.
-        - If only `duration` is True:
-            Returns T as a `ufloat`.
-        - If only `angle` is True:
-            Returns the angular offset as a `ufloat`.
+    numpy.ndarray[uncertainties.UFloat] 
+        - If `zero_pos` is not set to None:
+            Returns an array containing all fitted parameters with uncertainties and the offset with uncertainty.
         - Otherwise:
             Returns all fitted parameters as an array with uncertainties
             (`uncertainties.unumpy.uarray`).
 
     Notes
     -----
-    - The period is computed as T = 2π / ω, where ω is the third fitted parameter.
     - Parameter uncertainties are derived from the covariance matrix returned
       by `curve_fit`.
 
     """
 
-    x, y = rotate_data(xdata, ydata)
+    x, y, x0 = rotate_data(xdata, ydata, zero_pos=zero_pos)
     popt, pcov = curve_fit(theta, t[cutoff:], x[cutoff:], p0=p0)
 
-    T = 2 * np.pi / ufloat(popt[2], pcov[2,2]**0.5)
+    if x0 != None:
+        o = ufloat(popt[4], pcov[4,4]**0.5) - x0
+        result = np.append(unp.uarray(popt, np.sqrt(np.diag(pcov))), o)
+    else:
+        result = unp.uarray(popt, np.sqrt(np.diag(pcov)))
 
     if plot:
         fig, (ax1, ax2) = plt.subplots(2, sharex=True)
@@ -142,17 +143,8 @@ def fit(t, xdata, ydata, p0: list = [180, 2000, 0.017, -1.5, 630], cutoff: int =
         ax2.set_xlabel('t')
         ax2.set_ylabel('y')
         plt.show()
-
-    if duration and angle:
-        return T, ufloat(popt[4], pcov[4,4]**0.5)
     
-    if duration:
-        return T
-    
-    if angle:
-        return ufloat(popt[4], pcov[4,4]**0.5)
-    
-    return unp.uarray(popt, np.sqrt(np.diag(pcov)))
+    return result
 
 
 # calculate G , incl uncertainties
