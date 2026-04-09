@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 from uncertainties import ufloat
 from uncertainties import unumpy as unp
+from uncertainties.umath import atan
 
 
 def theta(t, A, tau, w, phase, h):
@@ -12,23 +13,31 @@ def theta(t, A, tau, w, phase, h):
 def lin(x, a, b):
     return a * x + b
 
-def r(a, o):
-    b = ufloat(44, 0.01 / 3**0.5) * 1e-3
-    c = ufloat(117.12, 0.01 / 3**0.5) * 1e-3
-    d = ufloat(49.90, 0.03 / 3**0.5) * 1e-3
-    e = ufloat(25.04, 0.01 / 3**0.5) * 1e-3
-    p = (ufloat(120, 0.01 / 3**0.5) * 0.5 - ufloat(17.1, 0.01 / 3**0.5) * 0.5) * 1e-3
-    l = ufloat(4.321, 0.001)
-    
-    beta = a - 0.5 * b - 0.5 * d
-    gamma = c - 0.5 * d - 0.5 * e
+#def r(a, o):
+#    b = ufloat(44, 0.01 / 3**0.5) * 1e-3
+#    c = ufloat(117.12, 0.01 / 3**0.5) * 1e-3
+#    d = ufloat(49.90, 0.03 / 3**0.5) * 1e-3
+#    e = ufloat(25.04, 0.01 / 3**0.5) * 1e-3
+#    p = (ufloat(120, 0.01 / 3**0.5) * 0.5 - ufloat(17.1, 0.01 / 3**0.5) * 0.5) * 1e-3
+#    l = ufloat(4.321, 0.001)
+#    
+#    beta = a - 0.5 * b - 0.5 * d
+#    gamma = c - 0.5 * d - 0.5 * e
+#
+#    phi = 0.5 * np.arctan(o / l) + np.arcsin(beta / gamma)
+#
+#     return (gamma**2 + p**2 - 2 * gamma * p *np.cos(phi))
 
-    phi = 0.5 * np.arctan(o / l) + np.arcsin(beta / gamma)
 
-    return (gamma**2 + p**2 - 2 * gamma * p *np.cos(phi))
+#def calculate_effective_r(pos_m: list[ufloat], pos_M: list[ufloat], M = ufloat()):
+#    return None
+
+def calculate_angle_pendulum(o):
+    l = ufloat(4.321, 0.001) * 1e2
+    return 0.5 * atan(o / l)
 
 
-def conversion(h1, h2):
+def conversion(h1: list[ufloat], h2: list[ufloat]):
     """
     Calculate a factor to convert virtual meters to cm (!).
 
@@ -51,7 +60,8 @@ def conversion(h1, h2):
     return l_h/H
 
 
-def rotate_data(xdata, ydata, zero_pos: tuple[float | int] | None = None):
+def rotate_data(xdata, ydata, zero_pos: tuple[float | int] | None = None, fit: bool = True,
+                 h1: list[ufloat] | None = None, h2: list[ufloat] | None = None):
     """
     Rotate 2D data so that its dominant linear trend aligns with the x-axis.
 
@@ -81,22 +91,25 @@ def rotate_data(xdata, ydata, zero_pos: tuple[float | int] | None = None):
     - The data are shifted by the fitted intercept before rotation to center them.
     - Requires a linear model function `lin` compatible with `curve_fit`.
     """
+    if fit:
+        popt, pcov = curve_fit(lin, xdata=xdata, ydata=ydata)
+        phi = np.arctan(popt[0])
+    else:
+        c = conversion(h1, h2)
+        phi = np.arctan((h2[1].n + 0.7 * c.n**(-1) - h1[1].n) / (h2[0].n - h1[0].n))
     
-    popt, pcov = curve_fit(lin, xdata=xdata, ydata=ydata)
-    phi = np.arctan(popt[0])
-    
-    x = xdata * np.cos(-phi) - (ydata - popt[1]) * np.sin(-phi)
-    y = xdata * np.sin(-phi) + (ydata - popt[1]) * np.cos(-phi)
+    x = xdata * np.cos(-phi) - (ydata) * np.sin(-phi)
+    y = xdata * np.sin(-phi) + (ydata) * np.cos(-phi)
 
     if zero_pos != None:
-        o = zero_pos[0] * np.cos(-phi) - (zero_pos[1] - popt[1]) * np.sin(-phi)
+        o = zero_pos[0] * np.cos(-phi) - (zero_pos[1]) * np.sin(-phi)
         return x, y, o
     
     return x, y, None
 
 
-def fit(t, xdata, ydata, p0: list = [180, 2000, 0.017, -1.5, 630], cutoff: int = 0,cutoffend:  int = -1, zero_pos: tuple[float | int] | None = None,
-        h1: list[ufloat] | None = None, h2: list[ufloat] | None = None, plot: bool = False):
+def fit(t, xdata, ydata, p0: list = [180, 2000, 0.017, -1.5, 630], cutoff: tuple[int | None] = (None, None), zero_pos: tuple[float | int] | None = None,
+        plot: bool = False, fit: bool = True, h1: list[ufloat] | None = None, h2: list[ufloat] | None = None):
     """
     Fit the expected model to rotated raw tracking data and optionally return
     derived quantities or a plot.
@@ -144,9 +157,10 @@ def fit(t, xdata, ydata, p0: list = [180, 2000, 0.017, -1.5, 630], cutoff: int =
       by `curve_fit`.
 
     """
-
-    x, y, x0 = rotate_data(xdata, ydata, zero_pos=zero_pos)
-    popt, pcov = curve_fit(theta, t[cutoff:cutoffend], x[cutoff:cutoffend], p0=p0)
+    start, end = cutoff
+    
+    x, y, x0 = rotate_data(xdata, ydata, zero_pos=zero_pos, fit=fit, h1=h1, h2=h2)
+    popt, pcov = curve_fit(theta, t[start:end], x[start:end], p0=p0)
 
     if x0 != None:
         o = ufloat(popt[4], pcov[4,4]**0.5) - x0
@@ -158,7 +172,7 @@ def fit(t, xdata, ydata, p0: list = [180, 2000, 0.017, -1.5, 630], cutoff: int =
         fig, (ax1, ax2) = plt.subplots(2, sharex=True)
 
         ax1.plot(t, x - popt[4], 'k.', ms=1)
-        ax1.plot(t[cutoff:cutoffend], theta(t[cutoff:cutoffend], *popt) - popt[4], 'r')
+        ax1.plot(t[start:end], theta(t[start:end], *popt) - popt[4], 'r')
         #ax1.set_xlabel('t')
         ax1.set_ylabel('x')
 

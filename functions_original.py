@@ -95,7 +95,7 @@ def rotate_data(xdata, ydata, zero_pos: tuple[float | int] | None = None):
     return x, y, None
 
 
-def fit(t, xdata, ydata, p0: list = [180, 2000, 0.017, -1.5, 630], cutoff: int = 0,cutoffend:  int = -1, zero_pos: tuple[float | int] | None = None,
+def fit(t, xdata, ydata, p0: list = [180, 2000, 0.017, -1.5, 630], cutoff: int = 0, zero_pos: tuple[float | int] | None = None,
         h1: list[ufloat] | None = None, h2: list[ufloat] | None = None, plot: bool = False):
     """
     Fit the expected model to rotated raw tracking data and optionally return
@@ -146,7 +146,7 @@ def fit(t, xdata, ydata, p0: list = [180, 2000, 0.017, -1.5, 630], cutoff: int =
     """
 
     x, y, x0 = rotate_data(xdata, ydata, zero_pos=zero_pos)
-    popt, pcov = curve_fit(theta, t[cutoff:cutoffend], x[cutoff:cutoffend], p0=p0)
+    popt, pcov = curve_fit(theta, t[cutoff:], x[cutoff:], p0=p0)
 
     if x0 != None:
         o = ufloat(popt[4], pcov[4,4]**0.5) - x0
@@ -158,7 +158,7 @@ def fit(t, xdata, ydata, p0: list = [180, 2000, 0.017, -1.5, 630], cutoff: int =
         fig, (ax1, ax2) = plt.subplots(2, sharex=True)
 
         ax1.plot(t, x - popt[4], 'k.', ms=1)
-        ax1.plot(t[cutoff:cutoffend], theta(t[cutoff:cutoffend], *popt) - popt[4], 'r')
+        ax1.plot(t[cutoff:], theta(t[cutoff:], *popt) - popt[4], 'r')
         #ax1.set_xlabel('t')
         ax1.set_ylabel('x')
 
